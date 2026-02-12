@@ -11,9 +11,11 @@ export class AuthController {
     @Req() req: { session?: any },
   ) {
     const { email, password } = body;
+    console.log('🔐 Login attempt:', email, 'password:', password);
 
     // TODO: проверка в база
     if (email !== 'test@test.com' || password !== '123456') {
+      console.log('❌ Invalid credentials');
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -21,6 +23,8 @@ export class AuthController {
     req.session['user'] = {
       email,
     };
+    console.log('✅ Session created:', req.session);
+    console.log('Session ID:', req.sessionID);
 
     return { success: true };
   }

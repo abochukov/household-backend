@@ -7,6 +7,8 @@ import * as cookieParser from 'cookie-parser';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  console.log('🚀 NestJS backend starting...');
+
   // Позволяваме cookies между Angular и Nest
   app.enableCors({
     origin: 'http://localhost:4200',
@@ -29,5 +31,6 @@ async function bootstrap() {
   );
 
   await app.listen(3000);
+  console.log('✅ Backend is running on http://localhost:3000');
 }
 bootstrap();

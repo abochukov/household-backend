@@ -6,9 +6,10 @@ import { MeModule } from './me/me.module';
 
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuthInterceptor } from './common/interceptors/auth.interceptor';
+import { AddressModule } from './address/address.module';
 
 @Module({
-  imports: [AuthModule, MeModule],
+  imports: [AuthModule, MeModule, AddressModule],
   controllers: [AppController],
   providers: [
     AppService,

@@ -8,7 +8,7 @@ export class AuthController {
   @Post('login')
   async login(
     @Body() body: { email: string; password: string },
-    @Req() req: { session?: any },
+    @Req() req: any,
   ) {
     const { email, password } = body;
     console.log('🔐 Login attempt:', email, 'password:', password);

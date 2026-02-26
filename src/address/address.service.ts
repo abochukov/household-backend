@@ -24,6 +24,7 @@ export class AddressService {
       database: process.env.DB_NAME || 'household',
       user: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASSWORD || 'postgres',
+      options: '-c search_path=household,public',
     });
   }
 

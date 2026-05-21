@@ -4,6 +4,10 @@ import { Request } from 'express';
 
 @Controller('auth')
 export class AuthController {
+  private readonly devUsers: Array<{ email: string; password: string }> = [
+    { email: 'test@test.com', password: '123456' },
+    { email: 'admin@household.local', password: 'admin123' },
+  ];
 
   @Post('login')
   async login(
@@ -11,10 +15,13 @@ export class AuthController {
     @Req() req: any,
   ) {
     const { email, password } = body;
-    console.log('🔐 Login attempt:', email, 'password:', password);
+    console.log('🔐 Login attempt:', email);
 
-    // TODO: проверка в база
-    if (email !== 'test@test.com' || password !== '123456') {
+    const isValidUser = this.devUsers.some(
+      (u) => u.email === email && u.password === password,
+    );
+
+    if (!isValidUser) {
       console.log('❌ Invalid credentials');
       throw new UnauthorizedException('Invalid credentials');
     }

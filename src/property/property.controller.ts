@@ -12,6 +12,7 @@ export class PropertyController {
     floor: number;
     area: number;
     member_amount: number;
+    ideal_share?: number;
     elevator: boolean;
     pets?: boolean;
     rent?: boolean;

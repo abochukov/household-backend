@@ -13,6 +13,8 @@ export class PropertyController {
     area: number;
     member_amount: number;
     ideal_share?: number;
+    email?: string;
+    phone_number?: string;
     elevator: boolean;
     pets?: boolean;
     rent?: boolean;
@@ -26,8 +28,10 @@ export class PropertyController {
       console.log('✅ Property created:', property.property_id);
       return property;
     } catch (error) {
-      if (error.message === 'This property already exists at this address') {
-        throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+      const message = error instanceof Error ? error.message : 'Server error';
+
+      if (message === 'This property already exists at this address') {
+        throw new HttpException(message, HttpStatus.BAD_REQUEST);
       }
       console.error('❌ Error creating property:', error);
       throw new HttpException('Server error', HttpStatus.INTERNAL_SERVER_ERROR);

@@ -9,6 +9,8 @@ export interface Property {
   area: number;
   member_amount: number;
   ideal_share?: number;
+  email?: string;
+  phone_number?: string;
   pets?: boolean;
   rent?: boolean;
   elevator: boolean;
@@ -44,6 +46,8 @@ export class PropertyService {
     area: number;
     member_amount: number;
     ideal_share?: number;
+    email?: string;
+    phone_number?: string;
     elevator: boolean;
     pets?: boolean;
     rent?: boolean;
@@ -57,6 +61,8 @@ export class PropertyService {
       area,
       member_amount,
       ideal_share,
+      email,
+      phone_number,
       elevator,
       pets = false,
       rent = false,
@@ -89,8 +95,8 @@ export class PropertyService {
     }
 
     const result = await this.pool.query(
-      `INSERT INTO household.property (address_id, entrance_id, property_number, floor, area, member_amount, ideal_share, pets, rent, elevator, username, created_by, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+      `INSERT INTO household.property (address_id, entrance_id, property_number, floor, area, member_amount, ideal_share, email, phone_number, pets, rent, elevator, username, created_by, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
        RETURNING *`,
       [
         address_id,
@@ -100,6 +106,8 @@ export class PropertyService {
         area,
         member_amount,
         ideal_share,
+        email,
+        phone_number,
         pets,
         rent,
         elevator,
@@ -121,6 +129,8 @@ export class PropertyService {
         p.area,
         p.member_amount,
         p.ideal_share,
+        p.email,
+        p.phone_number,
         p.pets,
         p.rent,
         p.elevator,
@@ -150,6 +160,8 @@ export class PropertyService {
         p.area,
         p.member_amount,
         p.ideal_share,
+        p.email,
+        p.phone_number,
         p.pets,
         p.rent,
         p.elevator,
@@ -169,7 +181,7 @@ export class PropertyService {
   }
 
   async updateProperty(propertyId: number, propertyData: Partial<Property>): Promise<Property> {
-    const { property_number, floor, area, member_amount, ideal_share, pets, rent, elevator } = propertyData;
+    const { property_number, floor, area, member_amount, ideal_share, email, phone_number, pets, rent, elevator } = propertyData;
 
     const result = await this.pool.query(
         `UPDATE household.property
@@ -178,12 +190,14 @@ export class PropertyService {
            area = COALESCE($3, area),
            member_amount = COALESCE($4, member_amount),
          ideal_share = COALESCE($5, ideal_share),
-         pets = COALESCE($6, pets),
-         rent = COALESCE($7, rent),
-         elevator = COALESCE($8, elevator)
-       WHERE property_id = $9
+         email = COALESCE($6, email),
+         phone_number = COALESCE($7, phone_number),
+         pets = COALESCE($8, pets),
+         rent = COALESCE($9, rent),
+         elevator = COALESCE($10, elevator)
+       WHERE property_id = $11
        RETURNING *`,
-      [property_number, floor, area, member_amount, ideal_share, pets, rent, elevator, propertyId]
+      [property_number, floor, area, member_amount, ideal_share, email, phone_number, pets, rent, elevator, propertyId]
     );
 
     return result.rows[0];

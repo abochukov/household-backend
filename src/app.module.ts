@@ -9,9 +9,10 @@ import { AuthInterceptor } from './common/interceptors/auth.interceptor';
 import { AddressModule } from './address/address.module';
 import { PropertyModule } from './property/property.module';
 import { SmsModule } from './sms/sms.module';
+import { TotalSumModule } from './total-sum/total-sum.module';
 
 @Module({
-  imports: [AuthModule, MeModule, AddressModule, PropertyModule, SmsModule],
+  imports: [AuthModule, MeModule, AddressModule, PropertyModule, SmsModule, TotalSumModule],
   controllers: [AppController],
   providers: [
     AppService,

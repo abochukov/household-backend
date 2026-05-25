@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
+import { NotificationService } from './notification.service';
 
 export type MonthColumn =
   | 'january'
@@ -73,7 +74,7 @@ export interface YearlyTotalRow {
 export class TotalSumService {
   private pool: Pool;
 
-  constructor() {
+  constructor(private readonly notificationService: NotificationService) {
     this.pool = new Pool({
       host: process.env.DB_HOST || 'localhost',
       port: parseInt(process.env.DB_PORT || '5432', 10),
@@ -232,10 +233,14 @@ export class TotalSumService {
     month: MonthColumn;
     paid_by?: string;
     note?: string;
-  }): Promise<{ success: boolean; paid_amount: number; already_paid: boolean }> {
+  }): Promise<{ success: boolean; paid_amount: number; already_paid: boolean; email_sent: boolean; sms_sent: boolean }> {
     const { username, address_id, property_id, year, month, paid_by, note } = params;
 
     const client = await this.pool.connect();
+    let propertyNumber = '';
+    let propertyEmail = '';
+    let propertyPhoneNumber = '';
+    let monthCharge = 0;
 
     try {
       await client.query('BEGIN');
@@ -243,10 +248,16 @@ export class TotalSumService {
       await this.verifyPropertyOwnership(client, property_id, address_id, username);
 
       const chargeResult = await client.query(
-        `SELECT property_number, ${month} AS month_value
-         FROM household.total_sum
-         WHERE property_id = $1
-           AND year = $2
+        `SELECT
+           COALESCE(ts.property_number, p.property_number) AS property_number,
+           p.email,
+           p.phone_number,
+           ts.${month} AS month_value
+         FROM household.property p
+         LEFT JOIN household.total_sum ts
+           ON ts.property_id = p.property_id
+          AND ts.year = $2
+         WHERE p.property_id = $1
          LIMIT 1`,
         [property_id, year],
       );
@@ -255,8 +266,10 @@ export class TotalSumService {
         throw new Error('No saved monthly charge found');
       }
 
-      const propertyNumber = String(chargeResult.rows[0].property_number);
-      const monthCharge = Number(chargeResult.rows[0].month_value || 0);
+      propertyNumber = String(chargeResult.rows[0].property_number);
+      propertyEmail = String(chargeResult.rows[0].email || '').trim();
+      propertyPhoneNumber = String(chargeResult.rows[0].phone_number || '').trim();
+      monthCharge = Number(chargeResult.rows[0].month_value || 0);
 
       const existingPayment = await client.query(
         `SELECT id
@@ -270,7 +283,7 @@ export class TotalSumService {
 
       if (existingPayment.rows.length > 0) {
         await client.query('COMMIT');
-        return { success: true, paid_amount: 0, already_paid: true };
+        return { success: true, paid_amount: 0, already_paid: true, email_sent: false, sms_sent: false };
       }
 
       await client.query(
@@ -282,10 +295,24 @@ export class TotalSumService {
 
       await client.query('COMMIT');
 
+      const paymentMessage = this.buildPaymentMessage(propertyNumber, month, year);
+      const paymentEmailSubject = `Потвърждение за платена такса - ап.${propertyNumber}`;
+
+      // Keep payment persistence independent from external delivery channels.
+      const emailSent = await this.notificationService.sendPaymentEmail(
+        propertyEmail,
+        paymentEmailSubject,
+        paymentMessage,
+      );
+
+      const smsSent = await this.notificationService.sendPaymentSms(propertyPhoneNumber, paymentMessage);
+
       return {
         success: true,
         paid_amount: monthCharge,
         already_paid: false,
+        email_sent: emailSent,
+        sms_sent: smsSent,
       };
     } catch (error) {
       await client.query('ROLLBACK');
@@ -464,5 +491,39 @@ export class TotalSumService {
          AND year = $2`,
       [propertyId, year],
     );
+  }
+
+  private buildPaymentMessage(propertyNumber: string, month: MonthColumn, year: number): string {
+    const eventDate = this.formatDate(new Date());
+    const monthLabel = this.getMonthLabel(month);
+
+    return `Вие заплатихте такса за ап.${propertyNumber} за ${monthLabel} ${year} на ${eventDate}.`;
+  }
+
+  private formatDate(date: Date): string {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+
+    return `${day}.${month}.${year}`;
+  }
+
+  private getMonthLabel(month: MonthColumn): string {
+    const monthMap: Record<MonthColumn, string> = {
+      january: 'януари',
+      february: 'февруари',
+      march: 'март',
+      april: 'април',
+      may: 'май',
+      june: 'юни',
+      july: 'юли',
+      august: 'август',
+      september: 'септември',
+      october: 'октомври',
+      november: 'ноември',
+      december: 'декември',
+    };
+
+    return monthMap[month];
   }
 }

@@ -23,7 +23,7 @@ export class SmsService {
   // Hardcoded recipient as requested.
   private readonly testRecipientNumber = '+359878000000';
 
-  async sendTestSms(customMessage?: string): Promise<{ sid: string; to: string }> {
+  async sendSms(to: string, customMessage?: string): Promise<{ sid: string; to: string }> {
     const apiKey = 'c3775cc7d9aa4a6cb759ada05bf1da4e-67a1daef-bf8f-4c88-8526-a29279e22745';
     const baseUrl = 'nde55y.api.infobip.com';
     const senderId = '+447491163443';
@@ -44,7 +44,7 @@ export class SmsService {
       messages: [
         {
           from: senderId,
-          destinations: [{ to: this.testRecipientNumber }],
+          destinations: [{ to }],
           text: body,
         },
       ],
@@ -71,5 +71,9 @@ export class SmsService {
       sid: firstMessage.messageId,
       to: firstMessage.to,
     };
+  }
+
+  async sendTestSms(customMessage?: string): Promise<{ sid: string; to: string }> {
+    return this.sendSms(this.testRecipientNumber, customMessage);
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
 import { NotificationService } from './notification.service';
 
@@ -72,6 +72,7 @@ export interface YearlyTotalRow {
 
 @Injectable()
 export class TotalSumService {
+  private readonly logger = new Logger(TotalSumService.name);
   private pool: Pool;
 
   constructor(private readonly notificationService: NotificationService) {
@@ -234,17 +235,14 @@ export class TotalSumService {
     paid_by?: string;
     note?: string;
   }): Promise<{ success: boolean; paid_amount: number; already_paid: boolean; email_sent: boolean; sms_sent: boolean }> {
-    const { username, address_id, property_id, year, month, paid_by, note } = params;
+    const { username, address_id, property_id, year, month } = params;
 
     const client = await this.pool.connect();
     let propertyNumber = '';
     let propertyEmail = '';
-    let propertyPhoneNumber = '';
     let monthCharge = 0;
 
     try {
-      await client.query('BEGIN');
-
       await this.verifyPropertyOwnership(client, property_id, address_id, username);
 
       const chargeResult = await client.query(
@@ -268,54 +266,39 @@ export class TotalSumService {
 
       propertyNumber = String(chargeResult.rows[0].property_number);
       propertyEmail = String(chargeResult.rows[0].email || '').trim();
-      propertyPhoneNumber = String(chargeResult.rows[0].phone_number || '').trim();
       monthCharge = Number(chargeResult.rows[0].month_value || 0);
-
-      const existingPayment = await client.query(
-        `SELECT id
-         FROM household.total_sum_payment
-         WHERE property_id = $1
-           AND year = $2
-           AND month = $3
-         LIMIT 1`,
-        [property_id, year, month],
-      );
-
-      if (existingPayment.rows.length > 0) {
-        await client.query('COMMIT');
-        return { success: true, paid_amount: 0, already_paid: true, email_sent: false, sms_sent: false };
-      }
-
-      await client.query(
-        `INSERT INTO household.total_sum_payment
-          (property_id, property_number, year, month, amount_paid, paid_by, note)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [property_id, propertyNumber, year, month, monthCharge, paid_by || username, note || null],
-      );
-
-      await client.query('COMMIT');
 
       const paymentMessage = this.buildPaymentMessage(propertyNumber, month, year);
       const paymentEmailSubject = `Потвърждение за платена такса - ап.${propertyNumber}`;
 
-      // Keep payment persistence independent from external delivery channels.
+      this.logger.log(
+        `Payment email test mode for property_id=${property_id}, apartment=${propertyNumber}, month=${month}, year=${year}`,
+      );
+
       const emailSent = await this.notificationService.sendPaymentEmail(
         propertyEmail,
         paymentEmailSubject,
         paymentMessage,
       );
 
-      const smsSent = await this.notificationService.sendPaymentSms(propertyPhoneNumber, paymentMessage);
+      if (emailSent) {
+        this.logger.log(
+          `Payment email sent successfully to ${propertyEmail} for property_id=${property_id}, month=${month}, year=${year}`,
+        );
+      } else {
+        this.logger.warn(
+          `Payment email failed for ${propertyEmail || 'missing-email'} (property_id=${property_id}, month=${month}, year=${year})`,
+        );
+      }
 
       return {
         success: true,
         paid_amount: monthCharge,
         already_paid: false,
         email_sent: emailSent,
-        sms_sent: smsSent,
+        sms_sent: false,
       };
     } catch (error) {
-      await client.query('ROLLBACK');
       throw error;
     } finally {
       client.release();

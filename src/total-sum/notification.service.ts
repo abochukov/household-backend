@@ -14,6 +14,9 @@ export class NotificationService {
 
   async sendPaymentEmail(toEmail: string, subject: string, body: string): Promise<boolean> {
     if (!toEmail || !this.fromEmail) {
+      this.logger.warn(
+        `Email skipped: toEmail=${toEmail || 'missing'}, fromEmail=${this.fromEmail || 'missing'}, region=${this.region}`,
+      );
       return false;
     }
 
@@ -40,6 +43,8 @@ export class NotificationService {
           },
         }),
       );
+
+      this.logger.log(`Email sent via SES from ${this.fromEmail} to ${toEmail}`);
 
       return true;
     } catch (error) {

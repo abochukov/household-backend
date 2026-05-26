@@ -48,7 +48,32 @@ export class NotificationService {
 
       return true;
     } catch (error) {
-      this.logger.error(`Failed to send payment email to ${toEmail}`, error as Error);
+      const awsError = error as {
+        name?: string;
+        message?: string;
+        code?: string;
+        $metadata?: {
+          httpStatusCode?: number;
+          requestId?: string;
+          attempts?: number;
+          totalRetryDelay?: number;
+        };
+      };
+
+      const details = {
+        toEmail,
+        fromEmail: this.fromEmail,
+        region: this.region,
+        errorName: awsError?.name || 'UnknownError',
+        errorCode: awsError?.code || 'N/A',
+        errorMessage: awsError?.message || 'No error message available',
+        httpStatusCode: awsError?.$metadata?.httpStatusCode,
+        requestId: awsError?.$metadata?.requestId,
+        attempts: awsError?.$metadata?.attempts,
+        totalRetryDelay: awsError?.$metadata?.totalRetryDelay,
+      };
+
+      this.logger.error(`Failed to send payment email via SES`, JSON.stringify(details));
       return false;
     }
   }

@@ -73,7 +73,8 @@ export class NotificationService {
         totalRetryDelay: awsError?.$metadata?.totalRetryDelay,
       };
 
-      this.logger.error(`Failed to send payment email via SES`, JSON.stringify(details));
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`Failed to send payment email via SES: ${JSON.stringify(details)}`, stack);
       return false;
     }
   }

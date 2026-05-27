@@ -21,6 +21,8 @@ export interface DbUser {
 export class AuthService {
   private pool: Pool;
   private readonly saltRounds = 10;
+  private readonly verifyTokenPrefix = 'verify_';
+  private readonly resetTokenPrefix = 'reset_';
 
   constructor() {
     this.pool = new Pool({
@@ -78,7 +80,7 @@ export class AuthService {
     phone?: string;
   }): Promise<DbUser> {
     const passwordHash = await this.hashPassword(data.password);
-    const verificationToken = randomBytes(32).toString('hex');
+    const verificationToken = this.generateVerificationToken();
 
     const result = await this.pool.query(
       `INSERT INTO household.users (
@@ -118,6 +120,27 @@ export class AuthService {
     );
   }
 
+  async setResetPasswordToken(userId: number, token: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE household.users
+       SET verification_token = $1
+       WHERE id = $2`,
+      [token, userId],
+    );
+  }
+
+  async resetPasswordByUserId(userId: number, newPlainPassword: string): Promise<void> {
+    const passwordHash = await this.hashPassword(newPlainPassword);
+
+    await this.pool.query(
+      `UPDATE household.users
+       SET password = $1,
+           verification_token = null
+       WHERE id = $2`,
+      [passwordHash, userId],
+    );
+  }
+
   async verifyPassword(plainPassword: string, storedHash: string): Promise<boolean> {
     return bcrypt.compare(plainPassword, storedHash);
   }
@@ -127,11 +150,39 @@ export class AuthService {
     return `${backendBaseUrl}/auth/verify-email?token=${token}`;
   }
 
+  buildResetPasswordUrl(token: string): string {
+    const appBaseUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
+    return `${appBaseUrl}/reset-password?token=${token}`;
+  }
+
+  generateVerificationToken(): string {
+    return `${this.verifyTokenPrefix}${randomBytes(32).toString('hex')}`;
+  }
+
+  generateResetPasswordToken(): string {
+    return `${this.resetTokenPrefix}${randomBytes(32).toString('hex')}`;
+  }
+
+  isVerificationToken(token: string): boolean {
+    return token.startsWith(this.verifyTokenPrefix);
+  }
+
+  isResetToken(token: string): boolean {
+    return token.startsWith(this.resetTokenPrefix);
+  }
+
   async sendVerificationEmail(email: string, verificationUrl: string): Promise<void> {
     // Placeholder until AWS SES is approved/configured.
     console.log('Email verification is not enabled yet.');
     console.log(`Send verification email to: ${email}`);
     console.log(`Verification URL: ${verificationUrl}`);
+  }
+
+  async sendResetPasswordEmail(email: string, resetUrl: string): Promise<void> {
+    // Placeholder until AWS SES is approved/configured.
+    console.log('Password reset email is not enabled yet.');
+    console.log(`Send password reset email to: ${email}`);
+    console.log(`Reset URL: ${resetUrl}`);
   }
 
   private async hashPassword(password: string): Promise<string> {

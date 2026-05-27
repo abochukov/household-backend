@@ -132,6 +132,10 @@ export class AuthController {
       throw new BadRequestException('Verification token is required');
     }
 
+    if (!this.authService.isVerificationToken(normalizedToken)) {
+      throw new BadRequestException('Invalid verification token type');
+    }
+
     const user = await this.authService.findByVerificationToken(normalizedToken);
     if (!user) {
       throw new BadRequestException('Invalid verification token');
@@ -142,6 +146,66 @@ export class AuthController {
     return {
       success: true,
       message: 'Account verified successfully. You can now sign in.',
+    };
+  }
+
+  @Post('forgot-password')
+  async forgotPassword(@Body() body: { email?: string }) {
+    const email = body.email?.trim().toLowerCase();
+    if (!email) {
+      throw new BadRequestException('Email is required');
+    }
+
+    const user = await this.authService.findByEmail(email);
+
+    // Return generic success to avoid account enumeration.
+    if (!user) {
+      return {
+        success: true,
+        message: 'If an account with this email exists, reset instructions have been prepared.',
+      };
+    }
+
+    const resetToken = this.authService.generateResetPasswordToken();
+    await this.authService.setResetPasswordToken(user.id, resetToken);
+
+    const resetUrl = this.authService.buildResetPasswordUrl(resetToken);
+    await this.authService.sendResetPasswordEmail(email, resetUrl);
+
+    return {
+      success: true,
+      message: 'If an account with this email exists, reset instructions have been prepared.',
+      reset_preview_url: resetUrl,
+    };
+  }
+
+  @Post('reset-password')
+  async resetPassword(@Body() body: { token?: string; newPassword?: string }) {
+    const token = body.token?.trim();
+    const newPassword = body.newPassword || '';
+
+    if (!token) {
+      throw new BadRequestException('Reset token is required');
+    }
+
+    if (!this.authService.isResetToken(token)) {
+      throw new BadRequestException('Invalid reset token type');
+    }
+
+    if (newPassword.length < 6) {
+      throw new BadRequestException('Password must be at least 6 characters');
+    }
+
+    const user = await this.authService.findByVerificationToken(token);
+    if (!user) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    await this.authService.resetPasswordByUserId(user.id, newPassword);
+
+    return {
+      success: true,
+      message: 'Password was updated successfully. You can now sign in.',
     };
   }
 

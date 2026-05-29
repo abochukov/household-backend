@@ -10,7 +10,11 @@ export class NotificationService {
 
   private readonly sesClient = new SESv2Client({ region: this.region });
 
-  constructor(private readonly smsService: SmsService) {}
+  constructor(private readonly smsService: SmsService) {
+    this.logger.log(
+      `SES initialized with region=${this.region}, fromEmail=${this.fromEmail ? this.fromEmail : 'missing'}`,
+    );
+  }
 
   async sendPaymentEmail(toEmail: string, subject: string, body: string): Promise<boolean> {
     if (!toEmail || !this.fromEmail) {
@@ -74,7 +78,10 @@ export class NotificationService {
       };
 
       const stack = error instanceof Error ? error.stack : undefined;
-      this.logger.error(`Failed to send payment email via SES: ${JSON.stringify(details)}`, stack);
+      this.logger.error(
+        `Failed to send payment email via SES: ${JSON.stringify(details)}. Verify NOTIFICATION_EMAIL_FROM identity, AWS region, IAM permission ses:SendEmail, and active AWS credentials.`,
+        stack,
+      );
       return false;
     }
   }

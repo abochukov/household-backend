@@ -235,7 +235,7 @@ export class TotalSumService {
     paid_by?: string;
     note?: string;
   }): Promise<{ success: boolean; paid_amount: number; already_paid: boolean; email_sent: boolean; sms_sent: boolean }> {
-    const { username, address_id, property_id, year, month } = params;
+    const { username, address_id, property_id, year, month, paid_by, note } = params;
 
     const client = await this.pool.connect();
     let propertyNumber = '';
@@ -243,6 +243,8 @@ export class TotalSumService {
     let monthCharge = 0;
 
     try {
+      await client.query('BEGIN');
+
       await this.verifyPropertyOwnership(client, property_id, address_id, username);
 
       const chargeResult = await client.query(
@@ -267,6 +269,44 @@ export class TotalSumService {
       propertyNumber = String(chargeResult.rows[0].property_number);
       propertyEmail = String(chargeResult.rows[0].email || '').trim();
       monthCharge = Number(chargeResult.rows[0].month_value || 0);
+
+      const paymentCheck = await client.query(
+        `SELECT id
+         FROM household.total_sum_payment
+         WHERE property_id = $1
+           AND year = $2
+           AND month = $3
+         LIMIT 1`,
+        [property_id, year, month],
+      );
+
+      if (paymentCheck.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return {
+          success: true,
+          paid_amount: monthCharge,
+          already_paid: true,
+          email_sent: false,
+          sms_sent: false,
+        };
+      }
+
+      await client.query(
+        `INSERT INTO household.total_sum_payment
+          (property_id, property_number, year, month, amount_paid, paid_by, note)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          property_id,
+          propertyNumber,
+          year,
+          month,
+          monthCharge,
+          (paid_by || username || '').trim() || null,
+          (note || '').trim() || null,
+        ],
+      );
+
+      await client.query('COMMIT');
 
       const paymentMessage = this.buildPaymentMessage(propertyNumber, month, year);
       const paymentEmailSubject = `Потвърждение за платена такса - ап.${propertyNumber}`;
@@ -299,6 +339,11 @@ export class TotalSumService {
         sms_sent: false,
       };
     } catch (error) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // no-op if transaction is already closed
+      }
       throw error;
     } finally {
       client.release();

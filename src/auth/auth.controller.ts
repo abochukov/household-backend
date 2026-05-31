@@ -77,7 +77,7 @@ export class AuthController {
 
     return {
       success: true,
-      message: 'Account created. Verification email is pending delivery configuration.',
+      message: 'Account created. If email delivery is enabled, a verification email has been sent.',
       email,
       verification_preview_url: verificationUrl,
     };

@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { Pool } from 'pg';
 import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
+import { Logger } from '@nestjs/common';
+import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 
 export interface DbUser {
   id: number;
@@ -19,10 +21,15 @@ export interface DbUser {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private pool: Pool;
   private readonly saltRounds = 10;
   private readonly verifyTokenPrefix = 'verify_';
   private readonly resetTokenPrefix = 'reset_';
+  private readonly emailEnabled = (process.env.AUTH_EMAIL_ENABLED || 'false').toLowerCase() === 'true';
+  private readonly sesRegion = process.env.AWS_REGION || 'eu-central-1';
+  private readonly fromEmail = process.env.NOTIFICATION_EMAIL_FROM || '';
+  private readonly sesClient = new SESv2Client({ region: this.sesRegion });
 
   constructor() {
     this.pool = new Pool({
@@ -172,17 +179,108 @@ export class AuthService {
   }
 
   async sendVerificationEmail(email: string, verificationUrl: string): Promise<void> {
-    // Placeholder until AWS SES is approved/configured.
-    console.log('Email verification is not enabled yet.');
-    console.log(`Send verification email to: ${email}`);
-    console.log(`Verification URL: ${verificationUrl}`);
+    const subject = 'Verify your Household account';
+    const body = `Welcome to Household!\n\nPlease verify your email by opening this link:\n${verificationUrl}\n\nIf you did not create this account, you can ignore this email.`;
+
+    await this.sendEmailViaSes(email, subject, body, {
+      disabledLogPrefix: 'Email verification is not enabled yet.',
+      previewUrlLabel: 'Verification URL',
+      previewUrl: verificationUrl,
+    });
   }
 
   async sendResetPasswordEmail(email: string, resetUrl: string): Promise<void> {
-    // Placeholder until AWS SES is approved/configured.
-    console.log('Password reset email is not enabled yet.');
-    console.log(`Send password reset email to: ${email}`);
-    console.log(`Reset URL: ${resetUrl}`);
+    const subject = 'Reset your Household password';
+    const body = `We received a request to reset your Household password.\n\nOpen this link to set a new password:\n${resetUrl}\n\nIf you did not request a reset, you can ignore this email.`;
+
+    await this.sendEmailViaSes(email, subject, body, {
+      disabledLogPrefix: 'Password reset email is not enabled yet.',
+      previewUrlLabel: 'Reset URL',
+      previewUrl: resetUrl,
+    });
+  }
+
+  private async sendEmailViaSes(
+    toEmail: string,
+    subject: string,
+    body: string,
+    options: {
+      disabledLogPrefix: string;
+      previewUrlLabel: string;
+      previewUrl: string;
+    },
+  ): Promise<void> {
+    if (!this.emailEnabled) {
+      this.logger.warn(options.disabledLogPrefix);
+      this.logger.warn(`Send email to: ${toEmail}`);
+      this.logger.warn(`${options.previewUrlLabel}: ${options.previewUrl}`);
+      return;
+    }
+
+    if (!toEmail || !this.fromEmail) {
+      this.logger.error(
+        `Email skipped: toEmail=${toEmail || 'missing'}, fromEmail=${this.fromEmail || 'missing'}, region=${this.sesRegion}`,
+      );
+      return;
+    }
+
+    try {
+      await this.sesClient.send(
+        new SendEmailCommand({
+          FromEmailAddress: this.fromEmail,
+          Destination: {
+            ToAddresses: [toEmail],
+          },
+          Content: {
+            Simple: {
+              Subject: {
+                Data: subject,
+                Charset: 'UTF-8',
+              },
+              Body: {
+                Text: {
+                  Data: body,
+                  Charset: 'UTF-8',
+                },
+              },
+            },
+          },
+        }),
+      );
+
+      this.logger.log(`Auth email sent via SES from ${this.fromEmail} to ${toEmail}`);
+    } catch (error) {
+      const awsError = error as {
+        name?: string;
+        message?: string;
+        code?: string;
+        $metadata?: {
+          httpStatusCode?: number;
+          requestId?: string;
+          attempts?: number;
+          totalRetryDelay?: number;
+        };
+      };
+
+      const details = {
+        toEmail,
+        fromEmail: this.fromEmail,
+        region: this.sesRegion,
+        errorName: awsError?.name || 'UnknownError',
+        errorCode: awsError?.code || 'N/A',
+        errorMessage: awsError?.message || 'No error message available',
+        httpStatusCode: awsError?.$metadata?.httpStatusCode,
+        requestId: awsError?.$metadata?.requestId,
+        attempts: awsError?.$metadata?.attempts,
+        totalRetryDelay: awsError?.$metadata?.totalRetryDelay,
+      };
+
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(
+        `Failed to send auth email via SES: ${JSON.stringify(details)}. Verify AUTH_EMAIL_ENABLED, NOTIFICATION_EMAIL_FROM identity, AWS region, IAM permission ses:SendEmail, and active AWS credentials.`,
+        stack,
+      );
+    }
   }
 
   private async hashPassword(password: string): Promise<string> {

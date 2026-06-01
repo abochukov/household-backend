@@ -13,7 +13,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { Response } from 'express';
+import type { Response } from 'express';
 
 @Controller('auth')
 export class AuthController {
@@ -128,7 +128,7 @@ export class AuthController {
   }
 
   @Get('verify-email')
-  async verifyEmail(@Query('token') token?: string, @Res() res: Response) {
+  async verifyEmail(@Res() res: Response, @Query('token') token?: string) {
     const normalizedToken = token?.trim();
     if (!normalizedToken) {
       throw new BadRequestException('Verification token is required');

@@ -9,9 +9,11 @@ import {
   Body,
   Query,
   Req,
+  Res,
   UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { Response } from 'express';
 
 @Controller('auth')
 export class AuthController {
@@ -126,7 +128,7 @@ export class AuthController {
   }
 
   @Get('verify-email')
-  async verifyEmail(@Query('token') token?: string) {
+  async verifyEmail(@Query('token') token?: string, @Res() res: Response) {
     const normalizedToken = token?.trim();
     if (!normalizedToken) {
       throw new BadRequestException('Verification token is required');
@@ -143,10 +145,8 @@ export class AuthController {
 
     await this.authService.markUserVerified(user.id);
 
-    return {
-      success: true,
-      message: 'Account verified successfully. You can now sign in.',
-    };
+    const loginUrl = this.authService.buildLoginUrl({ verified: '1' });
+    return res.redirect(loginUrl);
   }
 
   @Post('forgot-password')

@@ -162,6 +162,21 @@ export class AuthService {
     return `${appBaseUrl}/reset-password?token=${token}`;
   }
 
+  buildLoginUrl(queryParams?: Record<string, string>): string {
+    const appBaseUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
+    const loginUrl = new URL('/login', appBaseUrl);
+
+    if (queryParams) {
+      Object.entries(queryParams).forEach(([key, value]) => {
+        if (value) {
+          loginUrl.searchParams.set(key, value);
+        }
+      });
+    }
+
+    return loginUrl.toString();
+  }
+
   generateVerificationToken(): string {
     return `${this.verifyTokenPrefix}${randomBytes(32).toString('hex')}`;
   }

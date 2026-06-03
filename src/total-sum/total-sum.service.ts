@@ -308,7 +308,7 @@ export class TotalSumService {
 
       await client.query('COMMIT');
 
-      const paymentMessage = this.buildPaymentMessage(propertyNumber, month, year);
+      const paymentMessage = this.buildPaymentMessage(propertyNumber, month, year, monthCharge);
       const paymentEmailSubject = `Потвърждение за платена такса - ап.${propertyNumber}`;
 
       this.logger.log(
@@ -521,11 +521,16 @@ export class TotalSumService {
     );
   }
 
-  private buildPaymentMessage(propertyNumber: string, month: MonthColumn, year: number): string {
+  private buildPaymentMessage(propertyNumber: string, month: MonthColumn, year: number, amountPaid: number): string {
     const eventDate = this.formatDate(new Date());
     const monthLabel = this.getMonthLabel(month);
+    const formattedAmount = this.formatAmount(amountPaid);
 
-    return `Вие заплатихте такса за ап.${propertyNumber} за ${monthLabel} ${year} на ${eventDate}.`;
+    return `Вие заплатихте такса за ап.${propertyNumber} за ${monthLabel} ${year} в размер на ${formattedAmount} евро на дата ${eventDate}.`;
+  }
+
+  private formatAmount(amount: number): string {
+    return Number(amount || 0).toFixed(2);
   }
 
   private formatDate(date: Date): string {
